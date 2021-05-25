@@ -13,6 +13,8 @@ cd pico-wumpus
 Then edit CMakeList.txt and adjust the PICO_SDK_PATH. Then
 
 ```sh
+mkdir build
+cd build
 cmake ..
 make
 ```

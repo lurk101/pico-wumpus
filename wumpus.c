@@ -1,9 +1,13 @@
 /*
- *  wumpus (ported by lurk101)
- *  stolen from PCC Vol 2 No 1
+ * Copyright (c) 2021 lurk 101.
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ *
+ *  Wumpus (ported by lurk101)
+ *  Stolen from PCC Vol 2 No 1
  *
  *  This version has been updated to compile for Pico using
- *  gcc on the Raspberry Pi.
+ *  gcc and the Raspberry Pico SDK on the Raspberry Pi.
  *  The cave generator from the original has been replaced.
  *  A detector is added for the ever so rare dodecahedron cave.
  */
