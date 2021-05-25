@@ -30,13 +30,13 @@
 #define N_ARROWS 5  // 5 shots
 
 // Room flags
-#define HAS_BAT ((char)(1 << 0))
-#define HAS_PIT ((char)(1 << 1))
-#define HAS_WUMPUS ((char)(1 << 2))
-#define HAS_VISIT ((char)(1 << 3))
+#define HAS_BAT ((uint8_t)(1 << 0))
+#define HAS_PIT ((uint8_t)(1 << 1))
+#define HAS_WUMPUS ((uint8_t)(1 << 2))
+#define HAS_VISIT ((uint8_t)(1 << 3))
 
 // Tunnel flag
-#define UN_MAPPED ((char)-1)
+#define UN_MAPPED ((uint8_t)-1)
 
 static uint32_t cave, empty_cave;        // cave bitmaps
 static uint32_t arrow, loc, wloc;        // arrow count, player and wumpus locations
@@ -122,14 +122,16 @@ static char cchr;
 static void get_and_parse_cmd(void) {
     // read line into buffer
     char* cp = cmd_buffer;
+    char* cp_end = cp + sizeof(cmd_buffer);
     do {
         cchr = getchar();
-        if (cchr != '\b')
+        if (cchr == '\b') {
+            if (cp != cmd_buffer) {
+                cp--;
+                put_str(" \b");
+            }
+        } else if (cp < cp_end)
             *cp++ = cchr;
-        else if (cp != cmd_buffer) {
-            cp--;
-            put_str(" \b");
-        }
     } while ((cchr != '\r') && (cchr != '\n'));
     // parse buffer
     cp = cmd_buffer;
@@ -152,14 +154,14 @@ static void get_and_parse_cmd(void) {
 
 #if N_ROOMS == 20 // dodecahedron must have 20 rooms
 
-static unsigned char A[N_ROOMS][N_ROOMS];
-static unsigned char B[N_ROOMS][N_ROOMS];
-static unsigned char T[N_ROOMS][N_ROOMS];
+static uint8_t A[N_ROOMS][N_ROOMS];
+static uint8_t B[N_ROOMS][N_ROOMS];
+static uint8_t T[N_ROOMS][N_ROOMS];
 
 #if !defined(NDEBUG)
 
 // Known dodecahedron for debug sanity check
-static const char dodecahedron[N_ROOMS][N_TUNNELS] = {
+static const uint8_t dodecahedron[N_ROOMS][N_TUNNELS] = {
     {1, 4, 7},   {0, 2, 9},    {1, 3, 11},  {2, 4, 13},  {0, 3, 5},    {4, 6, 14},   {5, 7, 16},
     {0, 6, 8},   {7, 9, 17},   {1, 8, 10},  {9, 11, 18}, {2, 10, 12},  {11, 13, 19}, {3, 12, 14},
     {5, 13, 15}, {14, 16, 19}, {6, 15, 17}, {8, 16, 18}, {10, 17, 19}, {12, 15, 18}};
@@ -167,37 +169,35 @@ static const char dodecahedron[N_ROOMS][N_TUNNELS] = {
 #endif // !defined(NDEBUG)
 
 // The dodecahedron detector
+static inline void matrix_clear(uint8_t T[N_ROOMS][N_ROOMS]) {
+    for (uint32_t i = 0; i < N_ROOMS; i++)
+        for (uint32_t j = 0; j < N_ROOMS; j++)
+            T[i][j] = 0;
+}
+
 static void matrix_mult(uint8_t T[N_ROOMS][N_ROOMS], uint8_t A[N_ROOMS][N_ROOMS],
                         uint8_t B[N_ROOMS][N_ROOMS]) {
-    uint32_t i, j, k;
-    for (i = 0; i < N_ROOMS; i++)
-        for (j = 0; j < N_ROOMS; j++)
-            T[i][j] = 0;
-    for (i = 0; i < N_ROOMS; i++)
-        for (k = 0; k < N_ROOMS; k++)
-            for (j = 0; j < N_ROOMS; j++)
+    matrix_clear(T);
+    for (uint32_t i = 0; i < N_ROOMS; i++)
+        for (uint32_t k = 0; k < N_ROOMS; k++)
+            for (uint32_t j = 0; j < N_ROOMS; j++)
                 T[i][j] += A[i][k] * B[k][j];
 }
 
 static void matrix_square(uint8_t T[N_ROOMS][N_ROOMS], uint8_t A[N_ROOMS][N_ROOMS]) {
-    uint32_t i, j, k;
-    for (i = 0; i < N_ROOMS; i++)
-        for (j = 0; j < N_ROOMS; j++)
-            T[i][j] = 0;
-    for (i = 0; i < N_ROOMS; i++)
-        for (k = 0; k < N_ROOMS; k++)
-            for (j = 0; j < N_ROOMS; j++)
+    matrix_clear(T);
+    for (uint32_t i = 0; i < N_ROOMS; i++)
+        for (uint32_t k = 0; k < N_ROOMS; k++)
+            for (uint32_t j = 0; j < N_ROOMS; j++)
                 T[i][j] += A[i][k] * A[k][j];
 }
 
 // Return true if cave forms a dodecahedron
 static bool is_dodecahedron(void) {
-    for (uint32_t i = 0; i < N_ROOMS; i++)
-        for (uint32_t j = 0; j < N_ROOMS; j++)
-            A[i][j] = 0;
+    matrix_clear(A);
     for (uint32_t v = 0; v < N_ROOMS; v++)
         for (uint32_t d = 0; d < N_TUNNELS; d++)
-            A[v][(unsigned char)room[v][d]] = 1;
+            A[v][(uint8_t)room[v][d]] = 1;
     matrix_square(T, A);
     matrix_square(B, T);
     matrix_mult(T, A, B);
@@ -263,7 +263,7 @@ static bool directed_graph(void) {
         for (uint32_t t = 0; t < N_TUNNELS; t++)
             room[r][t] = UN_MAPPED;
 
-    // Step 1 - Generate a random 20 room hamilton_cycle.
+    // Step 1 - Generate a random 20 room cycle.
     uint32_t r = 0, rs = 0;
     cave = empty_cave;
     occupy_room(r);
@@ -311,7 +311,7 @@ static bool directed_graph(void) {
         for (uint32_t j = 0; j < N_TUNNELS; j++) {
             // tunnel doesn't circle back
             assert(room[i][j] != i);
-            count[(unsigned char)room[i][j]]++;
+            count[(uint8_t)room[i][j]]++;
         }
     }
     // Each room has 3 tunnels
@@ -324,9 +324,9 @@ static bool directed_graph(void) {
 }
 
 // Recursive depth 1st neighbor search for hazard
-static bool near(uint32_t r, char has, uint32_t depth) {
+static bool near(uint32_t r, uint8_t has, uint32_t depth) {
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
-        if (flags[(unsigned char)room[r][t]] & has)
+        if (flags[(uint8_t)room[r][t]] & has)
             return true;
         if ((depth > 1) && near(room[r][t], has, depth - 1))
             return true;
