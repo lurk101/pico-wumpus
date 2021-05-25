@@ -18,20 +18,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// boundaries
+// Boundaries
 #define N_BATS 3    // 3 bats
 #define N_ROOMS 20  // must be even
 #define N_TUNNELS 3 // must be 3
 #define N_PITS 3    // 3 pits
 #define N_ARROWS 5  // 5 shots
 
-// room flags
+// Room flags
 #define HAS_BAT ((char)(1 << 0))
 #define HAS_PIT ((char)(1 << 1))
 #define HAS_WUMPUS ((char)(1 << 2))
 #define HAS_VISIT ((char)(1 << 3))
 
-// tunnel flag
+// Tunnel flag
 #define UN_MAPPED ((char)-1)
 
 static uint32_t cave, empty_cave;        // cave bitmaps
@@ -39,7 +39,7 @@ static uint32_t arrow, loc, wloc;        // arrow count, player and wumpus locat
 static uint8_t flags[N_ROOMS];           // array of room  flags
 static uint8_t room[N_ROOMS][N_TUNNELS]; // tunnel map
 
-// instructions
+// Instructions
 static const char* intro = // clang-format off
     "\n"
     "The Wumpus lives in a cave of %d rooms.\n"
@@ -96,7 +96,7 @@ static inline uint32_t random_number(uint32_t n) {
     const uint32_t max_r = (1 << bits_used);
     uint32_t d = max_r / n;
     uint32_t r;
-    for (r = (rand() & (max_r - 1)) / d; r >= n;)
+    while ((r = (rand() & (max_r - 1)) / d) >= n)
         ;
     return r;
 }
@@ -146,8 +146,6 @@ static void get_and_parse_cmd(void) {
         *argv[0] |= ' '; // to lower lowercase
 }
 
-// Cave generator helpers
-
 #if N_ROOMS == 20 // dodecahedron must have 20 rooms
 
 static unsigned char A[N_ROOMS][N_ROOMS];
@@ -188,7 +186,7 @@ static void matrix_square(uint8_t T[N_ROOMS][N_ROOMS], uint8_t A[N_ROOMS][N_ROOM
                 T[i][j] += A[i][k] * A[k][j];
 }
 
-// return true if cave forms a dodecahedron
+// Return true if cave forms a dodecahedron
 static bool is_dodecahedron(void) {
     for (uint32_t i = 0; i < N_ROOMS; i++)
         for (uint32_t j = 0; j < N_ROOMS; j++)
@@ -206,6 +204,8 @@ static bool is_dodecahedron(void) {
 }
 
 #endif // N_ROOMS == 20
+
+// Cave generator helpers
 
 // Bitmap functions
 static inline void occupy_room(uint32_t b) { cave &= ~(1 << b); }
@@ -240,7 +240,7 @@ static void add_tunnel(uint32_t f, uint32_t t) {
     add_direct_tunnel(t, f);
 }
 
-// exchange adjacent bytes if 1st byte is greater than 2nd
+// Exchange adjacent bytes if 1st byte is greater than 2nd
 static inline void exchange(uint8_t* t) {
     if (*t > *(t + 1)) {
         *t ^= *(t + 1);
@@ -280,10 +280,10 @@ static bool directed_graph(void) {
     } while (cave);
     add_tunnel(r, rs);
 
-    // step 2 - add the third tunnels... if possible.
+    // Step 2 - add the third tunnels... if possible.
     cave = empty_cave;
     for (uint32_t n = 0; n < N_ROOMS / 2; n++) {
-        assert(cave); // Can't happen
+        assert(cave); // can't happen
         r = pick_and_occupy_empty_room();
         uint32_t save_cave = cave;
         // disqualify neighbors
@@ -297,7 +297,7 @@ static bool directed_graph(void) {
         add_tunnel(r, e);
     }
 
-    // step 3 - sort the tunnels
+    // Step 3 - sort the tunnels
     for (uint32_t i = 0; i < N_ROOMS; i++) {
         exchange(room[i]);
         exchange(room[i] + 1);
@@ -306,7 +306,7 @@ static bool directed_graph(void) {
 
 #if !defined(NDEBUG)
 
-    // map sanity check
+    // Map sanity check
     uint32_t count[N_ROOMS];
     for (uint32_t i = 0; i < N_ROOMS; i++)
         count[i] = 0;
@@ -320,7 +320,7 @@ static bool directed_graph(void) {
             count[(unsigned char)room[i][j]]++;
         }
     }
-    // each room has 3 tunnels
+    // Each room has 3 tunnels
     for (uint32_t i = 0; i < N_ROOMS; i++)
         assert(count[i] == 3);
 
@@ -329,7 +329,7 @@ static bool directed_graph(void) {
     return true;
 }
 
-// recursive depth 1st neighbor search
+// Recursive depth 1st neighbor search for hazard
 static bool near(uint32_t r, char has, uint32_t depth) {
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
         if (flags[(unsigned char)room[r][t]] & has)
@@ -341,7 +341,7 @@ static bool near(uint32_t r, char has, uint32_t depth) {
 }
 
 #if !defined(NDEBUG) || CHEAT
-// try to find player
+// Try to find player, starting at wumpus
 static bool search_for_arrow_path(uint32_t r, uint32_t depth) {
     flags[r] |= HAS_VISIT;
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
@@ -358,7 +358,7 @@ static bool search_for_arrow_path(uint32_t r, uint32_t depth) {
 }
 #endif // !defined(NDEBUG) || CHEAT
 
-// state functions
+// State functions
 typedef void* (*func_ptr)(void);
 
 static func_ptr start_handler(void);
@@ -380,7 +380,7 @@ static bool valid_room_number(int n) {
     return b;
 }
 
-// it starts here
+// It starts here
 static func_ptr start_handler(void) {
     empty_cave = (uint32_t)-1 >> (32 - N_ROOMS);
     put_str("\n\n"
@@ -392,20 +392,20 @@ static func_ptr start_handler(void) {
     return (func_ptr)instruction_handler;
 }
 
-// exit. Nowhere to go...
+// Exit. Nowhere to go...
 static func_ptr leave_handler(void) {
     put_str("\nBye!\n\n");
     exit(0);
     return (func_ptr)NULL; // satisfy the compiler
 }
 
-// show instructions
+// Show instructions
 static func_ptr instruction_handler(void) {
     printf(intro, N_ROOMS, N_TUNNELS, N_PITS, N_BATS, N_ARROWS, N_ARROWS);
     return (func_ptr)init_cave_handler;
 }
 
-// create a fresh cave
+// Create a fresh cave
 static func_ptr init_cave_handler(void) {
     put_str("\nCreating new cave map.");
     while (!directed_graph())
@@ -418,7 +418,7 @@ static func_ptr init_cave_handler(void) {
     return (func_ptr)setup_handler;
 }
 
-// setup a new game in the current cave
+// Setup a new game in the current cave
 static func_ptr setup_handler(void) {
     // put in player, wumpus, pits and bats
     uint32_t i, j;
@@ -452,7 +452,7 @@ static func_ptr setup_handler(void) {
     return (func_ptr)loop_handler;
 }
 
-// just landed in new room, game loop
+// Just landed in new room, game loop
 static func_ptr loop_handler(void) {
     printf("\nYou are in room %d", (int)loc + 1);
     // check for hazards
@@ -483,7 +483,7 @@ static func_ptr loop_handler(void) {
 }
 
 #if !defined(NDEBUG) || CHEAT
-// dump the cave cheat command
+// Dump the cave cheat command
 static func_ptr dump_cave_handler(void) {
     for (uint32_t r = 0; r < N_ROOMS; r++) {
         if ((r & 3) == 0)
@@ -502,7 +502,7 @@ static func_ptr dump_cave_handler(void) {
     return (func_ptr)again_handler;
 }
 
-// find the best shot cheat command
+// Find the best shot cheat command
 static func_ptr best_shot_handler(void) {
     printf("\nBest shot: ");
     uint32_t i;
@@ -522,7 +522,7 @@ static func_ptr best_shot_handler(void) {
 
 #endif // NDEBUG
 
-// what are you going to do here?
+// What are you going to do here?
 static func_ptr again_handler(void) {
     put_str("\nMove or shoot (m/s) ? ");
     get_and_parse_cmd();
@@ -544,7 +544,7 @@ static func_ptr again_handler(void) {
     return (func_ptr)again_handler;
 }
 
-// move on to next room
+// Move on to next room
 static func_ptr move_player_handler(void) {
     if (argc < 2) {
         put_str("\nwhich room ?\n");
@@ -566,7 +566,7 @@ static func_ptr move_player_handler(void) {
     return (func_ptr)again_handler;
 }
 
-// shoot an arrow
+// Shoot an arrow
 static func_ptr shoot_handler(void) {
     if (argc < 2) {
         put_str("\nWhich tunnel(s) ?\n");
@@ -618,7 +618,7 @@ static func_ptr shoot_handler(void) {
     return (func_ptr)move_wumpus_handler;
 }
 
-// wumpus disturbed, time to move it
+// Wumpus disturbed, time to move it
 static func_ptr move_wumpus_handler(void) {
     int i;
     flags[wloc] &= ~HAS_WUMPUS;
@@ -633,7 +633,7 @@ static func_ptr move_wumpus_handler(void) {
     return (func_ptr)loop_handler;
 }
 
-// game over. Play again?
+// Game over. Play again?
 static func_ptr done_handler(void) {
     put_str("\nAnother game (Y/n) ? ");
     get_and_parse_cmd();
@@ -648,7 +648,7 @@ static func_ptr done_handler(void) {
     return (func_ptr)leave_handler;
 }
 
-// forever loop
+// Forever loop
 int main(void) {
     stdio_init_all();
     getchar_timeout_us(1000); // swallow the spurious EOF character???
