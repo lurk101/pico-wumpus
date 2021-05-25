@@ -360,20 +360,12 @@ static func_ptr again_handler(void);
 static func_ptr move_player_handler(void);
 static func_ptr shoot_handler(void);
 static func_ptr move_wumpus_handler(void);
-static func_ptr leave_handler(void);
 
 static bool valid_room_number(int n) {
     bool b = (n >= 0) && (n < N_ROOMS);
     if (!b)
         printf("\n%d is not a room number\n", n + 1);
     return b;
-}
-
-// Exit. Nowhere to go...
-static func_ptr leave_handler(void) {
-    put_str("\nBye!\n\n");
-    exit(0);
-    return (func_ptr)NULL; // satisfy the compiler
 }
 
 // Show instructions
@@ -622,7 +614,9 @@ static func_ptr done_handler(void) {
         else
             return (func_ptr)init_cave_handler;
     }
-    return (func_ptr)leave_handler;
+    // Exit. Nowhere to go...
+    put_str("\nBye!\n\n");
+    exit(0);
 }
 
 // Forever loop
