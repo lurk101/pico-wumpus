@@ -26,7 +26,7 @@ target_link_libraries(wumpus pico_stdlib)
 pico_add_extra_outputs(wumpus)
 
 if (NOT ("${CMAKE_BUILD_TYPE}" MATCHES "Debug"))
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -Wl,–gc-sections -Os")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -Wl,–gc-sections -O3")
 endif()
 if (CHEAT)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCHEAT=1")
