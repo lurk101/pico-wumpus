@@ -91,6 +91,22 @@ static const char* intro = // clang-format off
     "When you are one room away from some other hazard, it says:\n"
     "   Bat    - 'Bats nearby'\n"
     "   Pit    - 'I feel a draft'\n";
+
+const char* banner =
+    " _   _             _     _____ _\n"
+    "| | | |           | |   |_   _| |\n"
+    "| |_| |_   _ _ __ | |_    | | | |__   ___\n"
+    "|  _  | | | | '_ \\| __|   | | | '_ \\ / _ \\\n"
+    "| | | | |_| | | | | |_    | | | | | |  __/\n"
+    "\\_| |_/\\__,_|_| |_|\\__|   \\_/ |_| |_|\\___|\n\n"
+    " _    _\n"
+    "| |  | |\n"
+    "| |  | |_   _ _ __ ___  _ __  _   _ ___\n"
+    "| |/\\| | | | | '_ ` _ \\| '_ \\| | | / __|\n"
+    "\\  /\\  / |_| | | | | | | |_) | |_| \\__ \\\n"
+    " \\/  \\/ \\__,_|_| |_| |_| .__/ \\__,_|___/\n"
+    "                       | |\n"
+    "                       |_|\n\n";
 // clang-format on
 
 // Random numbers
@@ -637,9 +653,10 @@ int main(void) {
 #endif // !defined(NDEBUG) && (N_ROOMS == 20)
 
     empty_cave = (uint32_t)-1 >> (32 - N_ROOMS);
-    put_str("\n\n"
-            "Welcome to HUNT THE WUMPUS.\n\n"
-            "Instructions (y/N) ? ");
+    printf("%s"
+           "Welcome to HUNT THE WUMPUS.\n\n"
+           "Instructions (y/N) ? ",
+           banner);
     get_and_parse_cmd();
 
     srand(time_us_32());
