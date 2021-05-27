@@ -18,9 +18,8 @@
 #endif
 
 #include "pico/stdlib.h"
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include "stdio.h"
+#include "stdlib.h"
 
 // Boundaries
 #define N_BATS 3    // 3 bats
@@ -255,8 +254,6 @@ static inline void exchange(uint8_t* t) {
 
 // Generate a new cave
 static bool directed_graph(void) {
-
-    srand(time_us_32());
 
     // Clear the tunnel map
     for (uint32_t r = 0; r < N_ROOMS; r++)
@@ -642,6 +639,9 @@ int main(void) {
             "Welcome to HUNT THE WUMPUS.\n\n"
             "Instructions (y/N) ? ");
     get_and_parse_cmd();
+
+    srand(time_us_32());
+
     func_ptr state =
         (func_ptr)(((argc == 0) || (*argv[0] == 'n')) ? init_cave_handler : instruction_handler);
 
