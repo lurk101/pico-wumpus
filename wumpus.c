@@ -19,6 +19,7 @@
 #define CHEAT 0
 #endif
 
+#include "hardware/flash.h"
 #include "pico/stdlib.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -42,10 +43,15 @@
 static uint32_t cave, empty_cave;        // cave bitmaps
 static uint32_t arrow, loc, wloc;        // arrow count, player and wumpus locations
 static uint8_t flags[N_ROOMS];           // array of room  flags
-static uint8_t room[N_ROOMS][N_TUNNELS]; // tunnel map
+static union {
+    uint8_t rooms[N_ROOMS][N_TUNNELS]; // tunnel map
+    uint8_t sector[FLASH_PAGE_SIZE];
+} buf;
+static bool new_cave = false;
 
 // Instructions
-static const char* intro = // clang-format off
+// clang-format off
+static const char* intro1 =
     "\n"
     "The Wumpus lives in a cave of %d rooms.\n"
     "Each room has %d tunnels leading to other rooms.\n\n"
@@ -64,7 +70,8 @@ static const char* intro = // clang-format off
     " your shooting an arrow anywhere in the cave.\n"
     "If the wumpus wakes, he either decides to move one room or\n"
     "stay where he was. But if he ends up where you are,\n"
-    "he eats you up and you lose!\n\n"
+    "he eats you up and you lose!\n\n";
+static const char* intro2 =
     "You:\n\n"
     "Each turn you may either move or shoot a crooked arrow.\n\n"
     "Moving - You can move to one of the adjoining rooms;\n"
@@ -83,7 +90,8 @@ static const char* intro = // clang-format off
     " three tunnels from the room it's in and goes its\n"
     " own way.\n\n"
     " If the arrow hits the wumpus, you win!\n"
-    " If the arrow hits you, you lose!\n\n"
+    " If the arrow hits you, you lose!\n\n";
+static const char* intro3 =
     "Warnings:\n\n"
     "When you are one or two rooms away from the wumpus,\n"
     "the computer says:\n"
@@ -192,8 +200,8 @@ static inline void matrix_clear(uint8_t T[N_ROOMS][N_ROOMS]) {
             T[i][j] = 0;
 }
 
-static void matrix_mult(uint8_t T[N_ROOMS][N_ROOMS], uint8_t A[N_ROOMS][N_ROOMS],
-                        uint8_t B[N_ROOMS][N_ROOMS]) {
+static void matrix_mult(uint8_t T[N_ROOMS][N_ROOMS], const uint8_t A[N_ROOMS][N_ROOMS],
+                        const uint8_t B[N_ROOMS][N_ROOMS]) {
     matrix_clear(T);
     for (uint32_t i = 0; i < N_ROOMS; i++)
         for (uint32_t k = 0; k < N_ROOMS; k++)
@@ -201,7 +209,7 @@ static void matrix_mult(uint8_t T[N_ROOMS][N_ROOMS], uint8_t A[N_ROOMS][N_ROOMS]
                 T[i][j] += A[i][k] * B[k][j];
 }
 
-static void matrix_square(uint8_t T[N_ROOMS][N_ROOMS], uint8_t A[N_ROOMS][N_ROOMS]) {
+static void matrix_square(uint8_t T[N_ROOMS][N_ROOMS], const uint8_t A[N_ROOMS][N_ROOMS]) {
     matrix_clear(T);
     for (uint32_t i = 0; i < N_ROOMS; i++)
         for (uint32_t k = 0; k < N_ROOMS; k++)
@@ -214,7 +222,7 @@ static bool is_dodecahedron(void) {
     matrix_clear(A);
     for (uint32_t v = 0; v < N_ROOMS; v++)
         for (uint32_t d = 0; d < N_TUNNELS; d++)
-            A[v][(uint8_t)room[v][d]] = 1;
+            A[v][buf.rooms[v][d]] = 1;
     matrix_square(T, A);
     matrix_square(B, T);
     matrix_mult(T, A, B);
@@ -233,6 +241,33 @@ static inline void occupy_room(uint32_t b) { cave &= ~(1 << b); }
 static inline bool room_is_empty(uint32_t b) { return (cave & (1 << b)) != 0; }
 static inline uint32_t vacant_room_count(void) { return __builtin_popcount(cave); }
 
+static bool verify_map(const uint8_t R[N_ROOMS][N_TUNNELS]) {
+    // Map sanity check
+    for (uint32_t i = 0; i < N_ROOMS; i++)
+        for (uint32_t j = 0; j < N_TUNNELS; j++)
+            if (R[i][j] >= N_ROOMS)
+                return false;
+    uint32_t count[N_ROOMS];
+    for (uint32_t i = 0; i < N_ROOMS; i++)
+        count[i] = 0;
+    for (uint32_t i = 0; i < N_ROOMS; i++) {
+        // 3 unique tunnels
+        if ((R[i][0] == R[i][1]) || (R[i][0] == R[i][2]) || (R[i][1] == R[i][2]))
+            return false;
+        for (uint32_t j = 0; j < N_TUNNELS; j++) {
+            // tunnel doesn't circle back
+            if (R[i][j] == i)
+                return false;
+            count[R[i][j]]++;
+        }
+    }
+    // Each room has 3 tunnels
+    for (uint32_t i = 0; i < N_ROOMS; i++)
+        if (count[i] != 3)
+            return false;
+    return true;
+}
+
 // Pick and occupy a random vacant room
 static uint32_t pick_and_occupy_empty_room(void) {
     uint32_t r, n = random_number(vacant_room_count());
@@ -249,8 +284,8 @@ static uint32_t pick_and_occupy_empty_room(void) {
 // Add tunnel from room to room
 static void add_direct_tunnel(uint32_t f, uint32_t t) {
     for (uint32_t i = 0; i < N_TUNNELS; i++)
-        if (room[f][i] == UN_MAPPED) {
-            room[f][i] = t;
+        if (buf.rooms[f][i] == UN_MAPPED) {
+            buf.rooms[f][i] = t;
             break;
         }
 }
@@ -276,7 +311,7 @@ static bool directed_graph(void) {
     // Clear the tunnel map
     for (uint32_t r = 0; r < N_ROOMS; r++)
         for (uint32_t t = 0; t < N_TUNNELS; t++)
-            room[r][t] = UN_MAPPED;
+            buf.rooms[r][t] = UN_MAPPED;
 
     // Step 1 - Generate a random 20 room cycle.
     uint32_t r = 0, rs = 0;
@@ -297,7 +332,7 @@ static bool directed_graph(void) {
         uint32_t save_cave = cave;
         // disqualify neighbors
         for (uint32_t t = 0; t < N_TUNNELS; t++)
-            occupy_room(room[r][t]);
+            occupy_room(buf.rooms[r][t]);
         if (!cave) // Oops, can't complete this one!
             return false;
         uint32_t e = pick_and_occupy_empty_room();
@@ -308,31 +343,13 @@ static bool directed_graph(void) {
 
     // Step 3 - sort the tunnels
     for (uint32_t i = 0; i < N_ROOMS; i++) {
-        exchange(room[i]);
-        exchange(room[i] + 1);
-        exchange(room[i]);
+        exchange(buf.rooms[i]);
+        exchange(buf.rooms[i] + 1);
+        exchange(buf.rooms[i]);
     }
 
 #if !defined(NDEBUG)
-
-    // Map sanity check
-    uint32_t count[N_ROOMS];
-    for (uint32_t i = 0; i < N_ROOMS; i++)
-        count[i] = 0;
-    for (uint32_t i = 0; i < N_ROOMS; i++) {
-        // 3 unique tunnels
-        assert((room[i][0] != room[i][1]) && (room[i][0] != room[i][2]) &&
-               (room[i][1] != room[i][2]));
-        for (uint32_t j = 0; j < N_TUNNELS; j++) {
-            // tunnel doesn't circle back
-            assert(room[i][j] != i);
-            count[(uint8_t)room[i][j]]++;
-        }
-    }
-    // Each room has 3 tunnels
-    for (uint32_t i = 0; i < N_ROOMS; i++)
-        assert(count[i] == 3);
-
+    assert(verify_map(buf.rooms));
 #endif // !defined(NDEBUG)
 
     return true;
@@ -341,9 +358,9 @@ static bool directed_graph(void) {
 // Recursive depth 1st neighbor search for hazard
 static bool near(uint32_t r, uint8_t has, uint32_t depth) {
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
-        if (flags[(uint8_t)room[r][t]] & has)
+        if (flags[buf.rooms[r][t]] & has)
             return true;
-        if ((depth > 1) && near(room[r][t], has, depth - 1))
+        if ((depth > 1) && near(buf.rooms[r][t], has, depth - 1))
             return true;
     }
     return false;
@@ -354,12 +371,12 @@ static bool near(uint32_t r, uint8_t has, uint32_t depth) {
 static bool search_for_arrow_path(uint32_t r, uint32_t depth) {
     flags[r] |= HAS_VISIT;
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
-        uint32_t e = room[r][t];
+        uint32_t e = buf.rooms[r][t];
         if (e == loc)
             return true;
         if (depth)
             if (!(flags[e] & HAS_VISIT) && search_for_arrow_path(e, depth - 1)) {
-                printf("%d ", room[r][t] + 1);
+                printf("%d ", buf.rooms[r][t] + 1);
                 return true;
             }
     }
@@ -371,6 +388,7 @@ static bool search_for_arrow_path(uint32_t r, uint32_t depth) {
 typedef void* (*func_ptr)(void);
 
 static func_ptr instruction_handler(void);
+static func_ptr init_1st_cave_handler(void);
 static func_ptr init_cave_handler(void);
 static func_ptr setup_handler(void);
 static func_ptr loop_handler(void);
@@ -389,7 +407,32 @@ static bool valid_room_number(int n) {
 
 // Show instructions
 static func_ptr instruction_handler(void) {
-    printf(intro, N_ROOMS, N_TUNNELS, N_PITS, N_BATS, N_ARROWS, N_ARROWS);
+    printf(intro1, N_ROOMS, N_TUNNELS, N_PITS, N_BATS);
+    put_str("Hit RETURN to continue ");
+    get_and_parse_cmd();
+    put_newline();
+    printf(intro2, N_BATS, N_ARROWS, N_ARROWS);
+    put_str("Hit RETURN to continue ");
+    get_and_parse_cmd();
+    put_newline();
+    put_str((char*)intro3);
+    return (func_ptr)init_1st_cave_handler;
+}
+
+// Create or load cave from flash
+static func_ptr init_1st_cave_handler(void) {
+    const uint8_t(*flash)[N_ROOMS][N_TUNNELS] =
+        (void*)(XIP_BASE + PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE);
+    if (!verify_map(*flash))
+        return (func_ptr)init_cave_handler;
+    put_str("\nContinue with saved cave (Y/n) ? ");
+    get_and_parse_cmd();
+    if ((argc == 0) || (*argv[0] == 'y')) {
+        for (uint32_t r = 0; r < N_ROOMS; r++)
+            for (uint32_t t = 0; t < N_TUNNELS; t++)
+                buf.rooms[r][t] = (*flash)[r][t];
+        return (func_ptr)setup_handler;
+    }
     return (func_ptr)init_cave_handler;
 }
 
@@ -403,6 +446,7 @@ static func_ptr init_cave_handler(void) {
         put_str(" Ooh! You're entering the rarest of caves, a dodecahedron.");
 #endif // N_ROOMS == 20
     put_newline();
+    new_cave = true;
     return (func_ptr)setup_handler;
 }
 
@@ -465,8 +509,8 @@ static func_ptr loop_handler(void) {
     if (near(loc, HAS_PIT, 1))
         put_str(". I feel a draft");
     // travel options
-    printf(". There are tunnels to rooms %d, %d and %d.\n", room[loc][0] + 1, room[loc][1] + 1,
-           room[loc][2] + 1);
+    printf(". There are tunnels to rooms %d, %d and %d.\n", buf.rooms[loc][0] + 1,
+           buf.rooms[loc][1] + 1, buf.rooms[loc][2] + 1);
     return (func_ptr)again_handler;
 }
 
@@ -476,7 +520,8 @@ static func_ptr dump_cave_handler(void) {
     for (uint32_t r = 0; r < N_ROOMS; r++) {
         if ((r & 3) == 0)
             put_newline();
-        printf("%02lu:%02d %02d %02d  ", r + 1, room[r][0] + 1, room[r][1] + 1, room[r][2] + 1);
+        printf("%02lu:%02d %02d %02d  ", r + 1, buf.rooms[r][0] + 1, buf.rooms[r][1] + 1,
+               buf.rooms[r][2] + 1);
     }
     printf("\n\nPlayer:%02lu  Wumpus:%02lu  Pits:", loc + 1, wloc + 1);
     for (uint32_t r = 0; r < N_ROOMS; r++)
@@ -544,7 +589,7 @@ static func_ptr move_player_handler(void) {
         return (func_ptr)again_handler;
     if (r < N_ROOMS)
         for (t = 0; t < N_TUNNELS; t++)
-            if (r == room[loc][t]) {
+            if (r == buf.rooms[loc][t]) {
                 loc = r;
                 if (flags[r] & HAS_WUMPUS)
                     return (func_ptr)move_wumpus_handler;
@@ -565,7 +610,7 @@ static func_ptr shoot_handler(void) {
             return (func_ptr)again_handler;
     uint32_t t, r = atoi(argv[1]) - 1;
     for (t = 0; t < N_TUNNELS; t++)
-        if (room[loc][t] == r)
+        if (buf.rooms[loc][t] == r)
             break;
     if (t == N_TUNNELS) {
         put_str("\nNo tunnel to that room!\n");
@@ -578,11 +623,11 @@ static func_ptr shoot_handler(void) {
             break;
         r = atoi(argv[i + 1]) - 1;
         for (t = 0; t < N_TUNNELS; t++)
-            if (r == room[l][t])
+            if (r == buf.rooms[l][t])
                 break;
         if (t == N_TUNNELS)
             t = random_number(N_TUNNELS);
-        r = room[l][t];
+        r = buf.rooms[l][t];
         put_str("~>");
         sleep_ms(500);
         printf("%d", (int)r + 1);
@@ -612,7 +657,7 @@ static func_ptr move_wumpus_handler(void) {
     flags[wloc] &= ~HAS_WUMPUS;
     i = random_number(N_TUNNELS + 1);
     if (i != N_TUNNELS)
-        wloc = room[wloc][i];
+        wloc = buf.rooms[wloc][i];
     if (wloc == loc) {
         printf("\nThe wumpus %sate you. You lose.\n", ((i == N_TUNNELS) ? "" : "moved and "));
         return (func_ptr)done_handler;
@@ -633,6 +678,13 @@ static func_ptr done_handler(void) {
         else
             return (func_ptr)init_cave_handler;
     }
+    if (new_cave) {
+        put_str("\nSaving cave for later...");
+        const uint32_t offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
+        flash_range_erase(offset, FLASH_SECTOR_SIZE);
+        flash_range_program(offset, buf.rooms[0], FLASH_PAGE_SIZE);
+        put_newline();
+    }
     // Exit. Nowhere to go...
     put_str("\nBye!\n\n");
     exit(0);
@@ -648,7 +700,7 @@ int main(void) {
     // test the dodecahedron detector
     for (uint32_t r = 0; r < N_ROOMS; r++)
         for (uint32_t t = 0; t < N_TUNNELS; t++)
-            room[r][t] = dodecahedron[r][t];
+            buf.rooms[r][t] = dodecahedron[r][t];
     assert(is_dodecahedron());
 #endif // !defined(NDEBUG) && (N_ROOMS == 20)
 
@@ -661,8 +713,8 @@ int main(void) {
 
     srand(time_us_32());
 
-    func_ptr state =
-        (func_ptr)(((argc == 0) || (*argv[0] == 'n')) ? init_cave_handler : instruction_handler);
+    func_ptr state = (func_ptr)(((argc == 0) || (*argv[0] == 'n')) ? init_1st_cave_handler
+                                                                   : instruction_handler);
 
     for (;; state = state())
         ;

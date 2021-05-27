@@ -1,0 +1,2 @@
+load wump.elf
+cont
