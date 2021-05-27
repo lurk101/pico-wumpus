@@ -1,5 +1,5 @@
 # pico-wumpus
-Hunt the Wumpus for Raspberry Pico
+Hunt the Wumpus for the Raspberry Pico
 
 Building it.
 
@@ -18,3 +18,11 @@ cd build
 cmake ..
 make
 ```
+Running it
+
+Use your prefered documented method for loading and running the
+code on the Pico.
+
+Your terminal program must be set to ECHO mode. Unlike the Linux
+shell, the Pico does not automatically send back every character
+it receives.
