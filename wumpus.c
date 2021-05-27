@@ -241,6 +241,24 @@ static inline void occupy_room(uint32_t b) { cave &= ~(1 << b); }
 static inline bool room_is_empty(uint32_t b) { return (cave & (1 << b)) != 0; }
 static inline uint32_t vacant_room_count(void) { return __builtin_popcount(cave); }
 
+// Try to find player, starting at wumpus
+static bool search_for_arrow_path(const uint8_t R[N_ROOMS][N_TUNNELS], uint32_t r, uint32_t depth,
+                                  bool print) {
+    flags[r] |= HAS_VISIT;
+    for (uint32_t t = 0; t < N_TUNNELS; t++) {
+        uint32_t e = R[r][t];
+        if (e == loc)
+            return true;
+        if (depth)
+            if (!(flags[e] & HAS_VISIT) && search_for_arrow_path(R, e, depth - 1, print)) {
+                if (print)
+                    printf("%d ", R[r][t] + 1);
+                return true;
+            }
+    }
+    return false;
+}
+
 static bool verify_map(const uint8_t R[N_ROOMS][N_TUNNELS]) {
     // Map sanity check
     for (uint32_t i = 0; i < N_ROOMS; i++)
@@ -265,6 +283,16 @@ static bool verify_map(const uint8_t R[N_ROOMS][N_TUNNELS]) {
     for (uint32_t i = 0; i < N_ROOMS; i++)
         if (count[i] != 3)
             return false;
+    // Is it connected?
+    for (uint32_t r1 = 0; r1 < N_ROOMS - 1; r1++) {
+        loc = r1;
+        for (uint32_t r2 = r1 + 1; r2 < N_ROOMS; r2++) {
+            for (uint32_t j = 0; j < N_ROOMS; j++)
+                flags[j] &= ~HAS_VISIT;
+            if (!search_for_arrow_path(R, r2, N_ROOMS - 1, false))
+                return false;
+        }
+    }
     return true;
 }
 
@@ -365,24 +393,6 @@ static bool near(uint32_t r, uint8_t has, uint32_t depth) {
     }
     return false;
 }
-
-#if !defined(NDEBUG) || CHEAT
-// Try to find player, starting at wumpus
-static bool search_for_arrow_path(uint32_t r, uint32_t depth) {
-    flags[r] |= HAS_VISIT;
-    for (uint32_t t = 0; t < N_TUNNELS; t++) {
-        uint32_t e = buf.rooms[r][t];
-        if (e == loc)
-            return true;
-        if (depth)
-            if (!(flags[e] & HAS_VISIT) && search_for_arrow_path(e, depth - 1)) {
-                printf("%d ", buf.rooms[r][t] + 1);
-                return true;
-            }
-    }
-    return false;
-}
-#endif // !defined(NDEBUG) || CHEAT
 
 // State functions
 typedef void* (*func_ptr)(void);
@@ -542,7 +552,7 @@ static func_ptr best_shot_handler(void) {
     for (i = 0; i <= N_ARROWS; i++) {
         for (uint32_t j = 0; j < N_ROOMS; j++)
             flags[j] &= ~HAS_VISIT;
-        if (search_for_arrow_path(wloc, i)) {
+        if (search_for_arrow_path(buf.rooms, wloc, i, true)) {
             printf("%lu", wloc + 1);
             break;
         }
