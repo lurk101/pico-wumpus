@@ -1,15 +1,17 @@
-/*
- * Copyright (c) 2021 lurk 101.
+/* Copyright (C) 1883 Thomas Edison - All Rights Reserved
+ * You may use, distribute and modify this code under the
+ * terms of the GPLv2 license, which unfortunately won't be
+ * written for another century.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
- *  Wumpus (ported by lurk101)
- *  Stolen from PCC Vol 2 No 1
+ * Wumpus (ported by lurk101)
+ * Stolen from PCC Vol 2 No 1
  *
- *  This version has been updated to compile for Pico using
- *  gcc and the Raspberry Pico SDK on the Raspberry Pi.
- *  The cave generator from the original has been replaced.
- *  A detector is added for the ever so rare dodecahedron cave.
+ * This version has been updated to compile for Pico using
+ * gcc and the Raspberry Pico SDK on the Raspberry Pi.
+ * The cave generator from the original has been replaced.
+ * A detector is added for the ever so rare dodecahedron cave.
  */
 
 // Enable cheat commands to dump the cave map and best shot.
