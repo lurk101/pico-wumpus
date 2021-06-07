@@ -3,9 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
-set(PICO_SDK_PATH "/home/pi/pico/pico-sdk")
-
-include(pico_sdk_import.cmake)
+include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(wump C CXX ASM)
 
@@ -13,7 +11,7 @@ option(CHEAT "Include cheat code" OFF)
 
 pico_sdk_init()
 
-add_executable(wump wumpus.c )
+add_executable(wump wumpus.c)
 
 pico_set_program_name(wump "wump")
 pico_set_program_version(wump "0.2")
