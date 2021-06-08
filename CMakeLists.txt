@@ -23,16 +23,9 @@ target_link_libraries(wump pico_stdlib hardware_flash)
 
 pico_add_extra_outputs(wump)
 
-if (NOT ("${CMAKE_BUILD_TYPE}" MATCHES "Debug"))
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections -Wl,–gc-sections -O3")
-endif()
 if (CHEAT)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DCHEAT=1")
 endif()
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall")
 
-message(STATUS "Build type ${CMAKE_BUILD_TYPE}, Cheat ${CHEAT}, Echo ${TERM_ECHO}")
-message(STATUS "CFlags ${CMAKE_C_FLAGS}")
-message(STATUS "${PICO_COMPILER_DIR}")
-message(STATUS "${PICO_COMPILER_CC}")
-
+message(STATUS "Build type ${CMAKE_BUILD_TYPE}, Cheat ${CHEAT}")
