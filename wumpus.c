@@ -24,6 +24,9 @@
 #include "stdio.h"
 #include "stdlib.h"
 
+#define likely(x) __builtin_expect((x), 1)
+#define unlikely(x) __builtin_expect((x), 0)
+
 // Boundaries
 #define N_BATS 3    // 3 bats
 #define N_ROOMS 20  // must be even
@@ -125,7 +128,7 @@ static inline uint32_t random_number(uint32_t n) {
     const uint32_t max_r = (1 << bits_used);
     uint32_t d = max_r / n;
     uint32_t r;
-    while ((r = (rand() & (max_r - 1)) / d) >= n)
+    while (unlikely((r = (rand() & (max_r - 1)) / d) >= n))
         ;
     return r;
 }
@@ -150,18 +153,18 @@ static void get_and_parse_cmd(void) {
     char* cp_end = cp + sizeof(cmd_buffer);
     do {
         cchr = getchar();
-        if (cchr == '\b') {
-            if (cp != cmd_buffer) {
+        if (unlikely(cchr == '\b')) {
+            if (likely(cp != cmd_buffer)) {
                 cp--;
                 put_str(" \b");
             }
-        } else if (cp < cp_end)
+        } else if (likely(cp < cp_end))
             *cp++ = cchr;
-    } while ((cchr != '\r') && (cchr != '\n'));
+    } while (likely((cchr != '\r') && (cchr != '\n')));
     // parse buffer
     cp = cmd_buffer;
     bool not_last = true;
-    for (argc = 0; not_last && (argc <= N_ARROWS); argc++) {
+    for (argc = 0; likely(not_last && (argc <= N_ARROWS)); argc++) {
         while ((*cp == ' ') || (*cp == ','))
             cp++; // skip blanks
         if ((*cp == '\r') || (*cp == '\n'))
@@ -173,7 +176,7 @@ static void get_and_parse_cmd(void) {
             not_last = false;
         *cp++ = 0; // terminate string
     }
-    if (argc)
+    if (likely(argc))
         *argv[0] |= ' '; // to lower lowercase
 }
 
@@ -247,9 +250,9 @@ static bool search_for_arrow_path(const uint8_t R[N_ROOMS][N_TUNNELS], uint32_t 
     flags[r] |= HAS_VISIT;
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
         uint32_t e = R[r][t];
-        if (e == loc)
+        if (unlikely(e == loc))
             return true;
-        if (depth)
+        if (likely(depth))
             if (!(flags[e] & HAS_VISIT) && search_for_arrow_path(R, e, depth - 1, print)) {
                 if (print)
                     printf("%d ", R[r][t] + 1);
@@ -263,25 +266,25 @@ static bool verify_map(const uint8_t R[N_ROOMS][N_TUNNELS]) {
     // Map sanity check
     for (uint32_t i = 0; i < N_ROOMS; i++)
         for (uint32_t j = 0; j < N_TUNNELS; j++)
-            if (R[i][j] >= N_ROOMS)
+            if (unlikely(R[i][j] >= N_ROOMS))
                 return false;
     uint32_t count[N_ROOMS];
     for (uint32_t i = 0; i < N_ROOMS; i++)
         count[i] = 0;
     for (uint32_t i = 0; i < N_ROOMS; i++) {
         // 3 unique tunnels
-        if ((R[i][0] == R[i][1]) || (R[i][0] == R[i][2]) || (R[i][1] == R[i][2]))
+        if (unlikely((R[i][0] == R[i][1]) || (R[i][0] == R[i][2]) || (R[i][1] == R[i][2])))
             return false;
         for (uint32_t j = 0; j < N_TUNNELS; j++) {
             // tunnel doesn't circle back
-            if (R[i][j] == i)
+            if (unlikely(R[i][j] == i))
                 return false;
             count[R[i][j]]++;
         }
     }
     // Each room has 3 tunnels
     for (uint32_t i = 0; i < N_ROOMS; i++)
-        if (count[i] != 3)
+        if (unlikely(count[i] != 3))
             return false;
     // Is it connected?
     for (uint32_t r1 = 0; r1 < N_ROOMS - 1; r1++) {
@@ -289,7 +292,7 @@ static bool verify_map(const uint8_t R[N_ROOMS][N_TUNNELS]) {
         for (uint32_t r2 = r1 + 1; r2 < N_ROOMS; r2++) {
             for (uint32_t j = 0; j < N_ROOMS; j++)
                 flags[j] &= ~HAS_VISIT;
-            if (!search_for_arrow_path(R, r2, N_ROOMS - 1, false))
+            if (unlikely(!search_for_arrow_path(R, r2, N_ROOMS - 1, false)))
                 return false;
         }
     }
@@ -349,7 +352,7 @@ static bool directed_graph(void) {
         uint32_t e = pick_and_occupy_empty_room();
         add_tunnel(r, e);
         r = e;
-    } while (cave);
+    } while (unlikely(cave));
     add_tunnel(r, rs);
 
     // Step 2 - add the third tunnels... if possible.
@@ -361,7 +364,7 @@ static bool directed_graph(void) {
         // disqualify neighbors
         for (uint32_t t = 0; t < N_TUNNELS; t++)
             occupy_room(buf.rooms[r][t]);
-        if (!cave) // Oops, can't complete this one!
+        if (unlikely(!cave)) // Oops, can't complete this one!
             return false;
         uint32_t e = pick_and_occupy_empty_room();
         cave = save_cave;
@@ -452,7 +455,7 @@ static func_ptr init_cave_handler(void) {
     while (!directed_graph())
         ;
 #if N_ROOMS == 20
-    if (is_dodecahedron())
+    if (unlikely(is_dodecahedron()))
         put_str(" Ooh! You're entering the rarest of caves, a dodecahedron.");
 #endif // N_ROOMS == 20
     put_newline();
@@ -469,14 +472,14 @@ static func_ptr setup_handler(void) {
         flags[i] = 0;
     for (i = 0; i < N_PITS;) {
         j = random_number(N_ROOMS);
-        if (!(flags[j] & HAS_PIT)) {
+        if (unlikely(!(flags[j] & HAS_PIT))) {
             flags[j] |= HAS_PIT;
             i++;
         }
     }
     for (i = 0; i < N_BATS;) {
         j = random_number(N_ROOMS);
-        if (!(flags[j] & (HAS_PIT | HAS_BAT))) {
+        if (unlikely(!(flags[j] & (HAS_PIT | HAS_BAT)))) {
             flags[j] |= HAS_BAT;
             i++;
         }
@@ -486,7 +489,7 @@ static func_ptr setup_handler(void) {
     for (;;)
     {
         i = random_number(N_ROOMS);
-        if (!(flags[i] & (HAS_PIT | HAS_BAT | HAS_WUMPUS))) {
+        if (unlikely(!(flags[i] & (HAS_PIT | HAS_BAT | HAS_WUMPUS)))) {
             loc = i;
             break;
         }
@@ -552,12 +555,12 @@ static func_ptr best_shot_handler(void) {
     for (i = 0; i <= N_ARROWS; i++) {
         for (uint32_t j = 0; j < N_ROOMS; j++)
             flags[j] &= ~HAS_VISIT;
-        if (search_for_arrow_path(buf.rooms, wloc, i, true)) {
+        if (likely(search_for_arrow_path(buf.rooms, wloc, i, true))) {
             printf("%lu", wloc + 1);
             break;
         }
     }
-    if (i == N_ARROWS)
+    if (unlikely(i == N_ARROWS))
         put_str("none");
     put_newline();
     return (func_ptr)again_handler;
@@ -611,24 +614,24 @@ static func_ptr move_player_handler(void) {
 
 // Shoot an arrow
 static func_ptr shoot_handler(void) {
-    if (argc < 2) {
+    if (unlikely(argc < 2)) {
         put_str("\nWhich tunnel(s) ?\n");
         return (func_ptr)again_handler;
     }
     for (uint32_t i = 1; i < argc; i++)
-        if (!valid_room_number(atoi(argv[i]) - 1))
+        if (unlikely(!valid_room_number(atoi(argv[i]) - 1)))
             return (func_ptr)again_handler;
     uint32_t t, r = atoi(argv[1]) - 1;
     for (t = 0; t < N_TUNNELS; t++)
         if (buf.rooms[loc][t] == r)
             break;
-    if (t == N_TUNNELS) {
+    if (unlikely(t == N_TUNNELS)) {
         put_str("\nNo tunnel to that room!\n");
         return (func_ptr)again_handler;
     }
     put_newline();
     int l = loc;
-    for (uint32_t i = 0; i < 5; i++) {
+    for (uint32_t i = 0; i < N_ARROWS; i++) {
         if (i > argc - 2)
             break;
         r = atoi(argv[i + 1]) - 1;
@@ -666,9 +669,9 @@ static func_ptr move_wumpus_handler(void) {
     int i;
     flags[wloc] &= ~HAS_WUMPUS;
     i = random_number(N_TUNNELS + 1);
-    if (i != N_TUNNELS)
+    if (likely(i != N_TUNNELS))
         wloc = buf.rooms[wloc][i];
-    if (wloc == loc) {
+    if (unlikely(wloc == loc)) {
         printf("\nThe wumpus %sate you. You lose.\n", ((i == N_TUNNELS) ? "" : "moved and "));
         return (func_ptr)done_handler;
     }
