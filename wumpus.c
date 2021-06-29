@@ -387,11 +387,11 @@ static bool directed_graph(void) {
 }
 
 // Recursive depth 1st neighbor search for hazard
-static bool near(uint32_t r, uint8_t has, uint32_t depth) {
+static bool near(uint32_t r, uint8_t haz, uint32_t depth) {
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
-        if (flags[buf.rooms[r][t]] & has)
+        if (flags[buf.rooms[r][t]] & haz)
             return true;
-        if ((depth > 1) && near(buf.rooms[r][t], has, depth - 1))
+        if ((depth > 1) && near(buf.rooms[r][t], haz, depth - 1))
             return true;
     }
     return false;
