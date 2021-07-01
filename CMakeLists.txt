@@ -19,7 +19,7 @@ pico_set_program_version(wump "0.2")
 pico_enable_stdio_uart(wump 1)
 pico_enable_stdio_usb(wump 0)
 
-target_link_libraries(wump pico_stdlib hardware_flash)
+target_link_libraries(wump pico_stdlib hardware_flash hardware_sync)
 
 pico_add_extra_outputs(wump)
 

@@ -20,6 +20,7 @@
 #endif
 
 #include "hardware/flash.h"
+#include "hardware/sync.h"
 #include "pico/stdlib.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -694,8 +695,10 @@ static func_ptr done_handler(void) {
     if (new_cave) {
         put_str("\nSaving cave for later...");
         const uint32_t offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
+        uint32_t ints = save_and_disable_interrupts();
         flash_range_erase(offset, FLASH_SECTOR_SIZE);
         flash_range_program(offset, buf.rooms[0], FLASH_PAGE_SIZE);
+        restore_interrupts(ints);
         put_newline();
     }
     // Exit. Nowhere to go...
@@ -718,10 +721,7 @@ int main(void) {
 #endif // !defined(NDEBUG) && (N_ROOMS == 20)
 
     empty_cave = (uint32_t)-1 >> (32 - N_ROOMS);
-    printf("%s"
-           "Welcome to HUNT THE WUMPUS.\n\n"
-           "Instructions (y/N) ? ",
-           banner);
+    printf("%sWelcome. Instructions (y/N) ? ", banner);
     get_and_parse_cmd();
 
     srand(time_us_32());
