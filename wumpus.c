@@ -123,26 +123,11 @@ const char* banner =
     "                       |_|\n\n";
 // clang-format on
 
-// Random numbers
-
-// Uniform distribution 0..n-1
+// Near uniform distribution 0..n-1
+#define BITS_USED 24
 static inline uint32_t random_number(uint32_t n) {
-    const uint32_t bits_used = 24;
-    const uint32_t max_r = (1 << bits_used);
-    uint32_t d = max_r / n;
-    uint32_t r;
-    while (unlikely((r = (rand() & (max_r - 1)) / d) >= n))
-        ;
-    return r;
+    return ((rand() & ((1 << BITS_USED) - 1)) * n) >> BITS_USED;
 }
-
-// Console output
-static inline void put_str(char* s) {
-    fputs(s, stdout);
-    fflush(stdout);
-}
-
-static inline void put_newline(void) { putchar('\n'); }
 
 // Console input
 static uint32_t argc;
@@ -159,7 +144,8 @@ static void get_and_parse_cmd(void) {
         if (unlikely(cchr == '\b')) {
             if (likely(cp != cmd_buffer)) {
                 cp--;
-                put_str(" \b");
+                printf(" \b");
+                fflush(stdout);
             }
         } else if (likely(cp < cp_end))
             *cp++ = cchr;
@@ -424,14 +410,16 @@ static bool valid_room_number(int n) {
 // Show instructions
 static func_ptr instruction_handler(void) {
     printf(intro1, N_ROOMS, N_TUNNELS, N_PITS, N_BATS);
-    put_str("Hit RETURN to continue ");
+    printf("Hit RETURN to continue ");
+    fflush(stdout);
     get_and_parse_cmd();
-    put_newline();
+    printf("\n");
     printf(intro2, N_ARROWS, N_ARROW_PATH);
-    put_str("Hit RETURN to continue ");
+    printf("Hit RETURN to continue ");
+    fflush(stdout);
     get_and_parse_cmd();
-    put_newline();
-    put_str((char*)intro3);
+    printf("\n");
+    printf((char*)intro3);
     return (func_ptr)init_1st_cave_handler;
 }
 
@@ -441,7 +429,8 @@ static func_ptr init_1st_cave_handler(void) {
         (void*)(XIP_BASE + PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE);
     if (!verify_map(*flash))
         return (func_ptr)init_cave_handler;
-    put_str("\nContinue with saved cave (Y/n) ? ");
+    printf("\nContinue with saved cave (Y/n) ? ");
+    fflush(stdout);
     get_and_parse_cmd();
     if ((argc == 0) || (*argv[0] == 'y')) {
         for (uint32_t r = 0; r < N_ROOMS; r++)
@@ -454,14 +443,14 @@ static func_ptr init_1st_cave_handler(void) {
 
 // Create a fresh cave
 static func_ptr init_cave_handler(void) {
-    put_str("\nCreating new cave map.");
+    printf("\nCreating new cave map.");
     while (!directed_graph())
         ;
 #if N_ROOMS == 20
     if (unlikely(is_dodecahedron()))
-        put_str(" Ooh! You're entering the rarest of caves, a dodecahedron.");
+        printf(" Ooh! You're entering the rarest of caves, a dodecahedron.");
 #endif // N_ROOMS == 20
-    put_newline();
+    printf("\n");
     new_cave = true;
     return (func_ptr)setup_handler;
 }
@@ -505,25 +494,25 @@ static func_ptr loop_handler(void) {
     printf("\nYou are in room %d", (int)loc + 1);
     // check for hazards
     if (flags[loc] & HAZ_PIT) {
-        put_str(". You fell into a pit. You lose.\n");
+        printf(". You fell into a pit. You lose.\n");
         return (func_ptr)done_handler;
     }
     if (flags[loc] & HAZ_WUMPUS) {
-        put_str(". You were eaten by the wumpus. You lose.\n");
+        printf(". You were eaten by the wumpus. You lose.\n");
         return (func_ptr)done_handler;
     }
     if (flags[loc] & HAZ_BAT) {
-        put_str(". Theres a bat in your room. Carying you away.\n");
+        printf(". Theres a bat in your room. Carying you away.\n");
         loc = random_number(N_ROOMS);
         return (func_ptr)loop_handler;
     }
     // anything nearby?
     if (near(loc, HAZ_WUMPUS, 2))
-        put_str(". I smell a wumpus");
+        printf(". I smell a wumpus");
     if (near(loc, HAZ_BAT, 1))
-        put_str(". Bats nearby");
+        printf(". Bats nearby");
     if (near(loc, HAZ_PIT, 1))
-        put_str(". I feel a draft");
+        printf(". I feel a draft");
     // travel options
     printf(". There are tunnels to rooms %d, %d and %d.\n", buf.rooms[loc][0] + 1,
            buf.rooms[loc][1] + 1, buf.rooms[loc][2] + 1);
@@ -535,7 +524,7 @@ static func_ptr loop_handler(void) {
 static func_ptr dump_cave_handler(void) {
     for (uint32_t r = 0; r < N_ROOMS; r++) {
         if ((r & 3) == 0)
-            put_newline();
+            printf("\n");
         printf("%2lu:%2d %2d %2d  ", r + 1, buf.rooms[r][0] + 1, buf.rooms[r][1] + 1,
                buf.rooms[r][2] + 1);
     }
@@ -543,11 +532,11 @@ static func_ptr dump_cave_handler(void) {
     for (uint32_t r = 0; r < N_ROOMS; r++)
         if (flags[r] & HAZ_PIT)
             printf("%2lu ", r + 1);
-    put_str(" Bats:");
+    printf(" Bats:");
     for (uint32_t r = 0; r < N_ROOMS; r++)
         if (flags[r] & HAZ_BAT)
             printf("%2lu ", r + 1);
-    put_newline();
+    printf("\n");
     return (func_ptr)again_handler;
 }
 
@@ -564,8 +553,8 @@ static func_ptr best_shot_handler(void) {
         }
     }
     if (unlikely(i == N_ARROWS))
-        put_str("none");
-    put_newline();
+        printf("none");
+    printf("\n");
     return (func_ptr)again_handler;
 }
 
@@ -573,7 +562,8 @@ static func_ptr best_shot_handler(void) {
 
 // What are you going to do here?
 static func_ptr again_handler(void) {
-    put_str("\nMove or shoot (m/s) ? ");
+    printf("\nMove or shoot (m/s) ? ");
+    fflush(stdout);
     get_and_parse_cmd();
     if (argc == 0)
         return (func_ptr)again_handler;
@@ -589,14 +579,14 @@ static func_ptr again_handler(void) {
         return (func_ptr)best_shot_handler;
 #endif // NDEBUG
     }
-    put_str("\nWhat ?\n");
+    printf("\nWhat ?\n");
     return (func_ptr)again_handler;
 }
 
 // Move on to next room
 static func_ptr move_player_handler(void) {
     if (argc < 2) {
-        put_str("\nwhich room ?\n");
+        printf("\nwhich room ?\n");
         return (func_ptr)again_handler;
     }
     int r, t;
@@ -611,14 +601,14 @@ static func_ptr move_player_handler(void) {
                     return (func_ptr)move_wumpus_handler;
                 return (func_ptr)loop_handler;
             }
-    put_str("\nYou hit the wall!\n");
+    printf("\nYou hit the wall!\n");
     return (func_ptr)again_handler;
 }
 
 // Shoot an arrow
 static func_ptr shoot_handler(void) {
     if (unlikely(argc < 2)) {
-        put_str("\nWhich tunnel(s) ?\n");
+        printf("\nWhich tunnel(s) ?\n");
         return (func_ptr)again_handler;
     }
     for (uint32_t i = 1; i < argc; i++)
@@ -629,10 +619,10 @@ static func_ptr shoot_handler(void) {
         if (buf.rooms[loc][t] == r)
             break;
     if (unlikely(t == N_TUNNELS)) {
-        put_str("\nNo tunnel to that room!\n");
+        printf("\nNo tunnel to that room!\n");
         return (func_ptr)again_handler;
     }
-    put_newline();
+    printf("\n");
     int l = loc;
     for (uint32_t i = 0; i < N_ARROW_PATH; i++) {
         if (i > argc - 2)
@@ -644,26 +634,28 @@ static func_ptr shoot_handler(void) {
         if (t == N_TUNNELS)
             t = random_number(N_TUNNELS);
         r = buf.rooms[l][t];
-        put_str("~>");
+        printf("~>");
+        fflush(stdout);
         sleep_ms(500);
         printf("%d", (int)r + 1);
+        fflush(stdout);
+        sleep_ms(500);
         if (r == loc) {
-            put_str("\n\nYou shot yourself! You lose.\n");
+            printf("\n\nYou shot yourself! You lose.\n");
             return (func_ptr)done_handler;
         }
         if (flags[r] & HAZ_WUMPUS) {
             printf("\n\nYou slew the wumpus in room %d. You win!\n", (int)r + 1);
             return (func_ptr)done_handler;
         }
-        sleep_ms(500);
         l = r;
     }
-    put_str("\n\nYou missed!");
+    printf("\n\nYou missed!");
     if (--arrow == 0) {
-        put_str(" That was your last shot! You lose.\n");
+        printf(" That was your last shot! You lose.\n");
         return (func_ptr)done_handler;
     }
-    put_newline();
+    printf("\n");
     return (func_ptr)move_wumpus_handler;
 }
 
@@ -684,10 +676,12 @@ static func_ptr move_wumpus_handler(void) {
 
 // Game over. Play again?
 static func_ptr done_handler(void) {
-    put_str("\nAnother game (Y/n) ? ");
+    printf("\nAnother game (Y/n) ? ");
+    fflush(stdout);
     get_and_parse_cmd();
     if ((argc == 0) || (*argv[0] == 'y')) {
-        put_str("\nSame room setup (Y/n) ? ");
+        printf("\nSame room setup (Y/n) ? ");
+        fflush(stdout);
         get_and_parse_cmd();
         if ((argc == 0) || (*argv[0] == 'y'))
             return (func_ptr)setup_handler;
@@ -695,16 +689,17 @@ static func_ptr done_handler(void) {
             return (func_ptr)init_cave_handler;
     }
     if (new_cave) {
-        put_str("\nSaving cave for later...");
+        printf("\nSaving cave for later...");
+        fflush(stdout);
         const uint32_t offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
         uint32_t ints = save_and_disable_interrupts();
         flash_range_erase(offset, FLASH_SECTOR_SIZE);
         flash_range_program(offset, buf.rooms[0], FLASH_PAGE_SIZE);
         restore_interrupts(ints);
-        put_newline();
+        printf("\n");
     }
     // Exit. Nowhere to go...
-    put_str("\nBye!\n\n");
+    printf("\nBye!\n\n");
     watchdog_reboot(0, 0, 3000);
     return NULL;
 }
@@ -713,7 +708,8 @@ static func_ptr done_handler(void) {
 int main(void) {
     stdio_init_all();
     getchar_timeout_us(1000); // swallow the spurious EOF character???
-    put_str("\033[H\033[J");  // try to clear the screen
+    printf("\033[H\033[J");   // try to clear the screen
+    fflush(stdout);
 
 #if !defined(NDEBUG) && (N_ROOMS == 20)
     // test the dodecahedron detector
