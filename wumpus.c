@@ -107,6 +107,7 @@ static const char* intro3 =
     "   Pit    - 'I feel a draft'\n";
 
 const char* banner =
+    "\n"
     " _   _             _     _____ _\n"
     "| | | |           | |   |_   _| |\n"
     "| |_| |_   _ _ __ | |_    | | | |__   ___\n"
@@ -700,14 +701,19 @@ static func_ptr done_handler(void) {
     }
     // Exit. Nowhere to go...
     printf("\nBye!\n\n");
-    watchdog_reboot(0, 0, 3000);
-    return NULL;
+    for (;;)
+        __wfi();
 }
 
 // Forever loop
 int main(void) {
     stdio_init_all();
     getchar_timeout_us(1000); // swallow the spurious EOF character???
+    printf("\033[H\033[JHit RETURN "); // try to clear the screen
+    fflush(stdout);
+
+    getchar_timeout_us(10000000);
+
     printf("\033[H\033[J");   // try to clear the screen
     fflush(stdout);
 
