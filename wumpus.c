@@ -135,23 +135,31 @@ static inline uint32_t random_number(uint32_t n) {
 static uint32_t argc;
 static char* argv[N_ARROW_PATH + 1];
 static char cmd_buffer[64];
-static char cchr;
+static char c;
+
+static inline char getkey(void) {
+    char c = getchar();
+    putchar(c);
+    if (c == '\r')
+        putchar('\n');
+    return c;
+}
 
 static void get_and_parse_cmd(void) {
     // read line into buffer
     char* cp = cmd_buffer;
     char* cp_end = cp + sizeof(cmd_buffer);
     do {
-        cchr = getchar();
-        if (unlikely(cchr == '\b')) {
+        c = getkey();
+        if (unlikely(c == '\b')) {
             if (likely(cp != cmd_buffer)) {
                 cp--;
                 printf(" \b");
                 fflush(stdout);
             }
         } else if (likely(cp < cp_end))
-            *cp++ = cchr;
-    } while (likely((cchr != '\r') && (cchr != '\n')));
+            *cp++ = c;
+    } while (likely((c != '\r') && (c != '\n')));
     // parse buffer
     cp = cmd_buffer;
     bool not_last = true;
