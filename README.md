@@ -8,11 +8,7 @@ First install the Raspberry Pico SDK. Then
 ```sh
 git clone https://github.com/lurk101/pico-wumpus.git
 cd pico-wumpus
-```
-
-Then edit CMakeList.txt and adjust the PICO_SDK_PATH. Then
-
-```sh
+git submodule update --init
 mkdir build
 cd build
 cmake ..
