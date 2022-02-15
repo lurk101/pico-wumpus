@@ -22,10 +22,13 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "hardware/watchdog.h"
+
 #include "pico/stdlib.h"
-#include "stdio.h"
+
 #include "stdlib.h"
-#include "tusb.h"
+#include "stdio.h"
+
+#include "stdinit.h"
 
 #define likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
@@ -709,30 +712,9 @@ static func_ptr done_handler(void) {
         __wfi();
 }
 
-void stdio_init(int uart_rx_pin) {
-    gpio_init(uart_rx_pin);
-    gpio_set_pulls(uart_rx_pin, 1, 0);
-    sleep_ms(1);
-    bool v1 = gpio_get(uart_rx_pin);
-    gpio_set_pulls(uart_rx_pin, 0, 1);
-    sleep_ms(1);
-    bool v2 = gpio_get(uart_rx_pin);
-    gpio_set_pulls(uart_rx_pin, 0, 0);
-    if (v1 != v2) {
-        stdio_usb_init();
-        while (!tud_cdc_connected())
-            sleep_ms(1000);
-    } else {
-        stdio_uart_init();
-        getchar_timeout_us(1000);
-    }
-}
-
 // Forever loop
 int main(void) {
-    stdio_init(PICO_DEFAULT_UART_RX_PIN);
-    printf("\033[H\033[J");   // try to clear the screen
-    fflush(stdout);
+    stdio_init();
 
 #if !defined(NDEBUG) && (N_ROOMS == 20)
     // test the dodecahedron detector
