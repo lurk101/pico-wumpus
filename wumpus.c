@@ -50,11 +50,13 @@
 // Tunnel flag
 #define UN_MAPPED ((uint8_t)-1)
 
+typedef uint8_t map_t[N_ROOMS][N_TUNNELS];
+
 static uint32_t cave, empty_cave;        // cave bitmaps
 static uint32_t arrow, loc, wloc;        // arrow count, player and wumpus locations
 static uint8_t flags[N_ROOMS];           // array of room  flags
 static union {
-    uint8_t rooms[N_ROOMS][N_TUNNELS]; // tunnel map
+    map_t rooms; // tunnel map
     uint8_t sector[FLASH_PAGE_SIZE];
 } buf;
 static bool new_cave = false;
@@ -186,7 +188,7 @@ static uint8_t T[N_ROOMS][N_ROOMS];
 #if !defined(NDEBUG)
 
 // Known dodecahedron for debug sanity check
-static const uint8_t dodecahedron[N_ROOMS][N_TUNNELS] = {
+static const map_t dodecahedron = {
     {1, 4, 7},   {0, 2, 9},    {1, 3, 11},  {2, 4, 13},  {0, 3, 5},    {4, 6, 14},   {5, 7, 16},
     {0, 6, 8},   {7, 9, 17},   {1, 8, 10},  {9, 11, 18}, {2, 10, 12},  {11, 13, 19}, {3, 12, 14},
     {5, 13, 15}, {14, 16, 19}, {6, 15, 17}, {8, 16, 18}, {10, 17, 19}, {12, 15, 18}};
@@ -242,11 +244,10 @@ static inline bool room_is_empty(uint32_t b) { return (cave & (1 << b)) != 0; }
 static inline uint32_t vacant_room_count(void) { return __builtin_popcount(cave); }
 
 // Try to find player, starting at wumpus
-static bool search_for_arrow_path(const uint8_t R[N_ROOMS][N_TUNNELS], uint32_t r, uint32_t depth,
-                                  bool print) {
+static bool search_for_arrow_path(const map_t* R, uint32_t r, uint32_t depth, bool print) {
     flags[r] |= HAZ_VISIT;
     for (uint32_t t = 0; t < N_TUNNELS; t++) {
-        uint32_t e = R[r][t];
+        uint32_t e = *R[r][t];
         if (unlikely(e == loc))
             return true;
         if (likely(depth))
@@ -259,24 +260,24 @@ static bool search_for_arrow_path(const uint8_t R[N_ROOMS][N_TUNNELS], uint32_t 
     return false;
 }
 
-static bool verify_map(const uint8_t R[N_ROOMS][N_TUNNELS]) {
+static bool verify_map(const map_t* R) {
     // Map sanity check
     for (uint32_t i = 0; i < N_ROOMS; i++)
         for (uint32_t j = 0; j < N_TUNNELS; j++)
-            if (unlikely(R[i][j] >= N_ROOMS))
+            if (unlikely(*R[i][j] >= N_ROOMS))
                 return false;
     uint32_t count[N_ROOMS];
     for (uint32_t i = 0; i < N_ROOMS; i++)
         count[i] = 0;
     for (uint32_t i = 0; i < N_ROOMS; i++) {
         // 3 unique tunnels
-        if (unlikely((R[i][0] == R[i][1]) || (R[i][0] == R[i][2]) || (R[i][1] == R[i][2])))
+        if (unlikely((*R[i][0] == *R[i][1]) || (*R[i][0] == *R[i][2]) || (*R[i][1] == *R[i][2])))
             return false;
         for (uint32_t j = 0; j < N_TUNNELS; j++) {
             // tunnel doesn't circle back
-            if (unlikely(R[i][j] == i))
+            if (unlikely(*R[i][j] == i))
                 return false;
-            count[R[i][j]]++;
+            count[*R[i][j]]++;
         }
     }
     // Each room has 3 tunnels
@@ -433,9 +434,8 @@ static func_ptr instruction_handler(void) {
 
 // Create or load cave from flash
 static func_ptr init_1st_cave_handler(void) {
-    const uint8_t(*flash)[N_ROOMS][N_TUNNELS] =
-        (void*)(XIP_BASE + PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE);
-    if (!verify_map(*flash))
+    const map_t* flash = (void*)(XIP_BASE + PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE);
+    if (!verify_map(flash))
         return (func_ptr)init_cave_handler;
     printf("\nContinue with saved cave (Y/n) ? ");
     fflush(stdout);
@@ -443,7 +443,7 @@ static func_ptr init_1st_cave_handler(void) {
     if ((argc == 0) || (*argv[0] == 'y')) {
         for (uint32_t r = 0; r < N_ROOMS; r++)
             for (uint32_t t = 0; t < N_TUNNELS; t++)
-                buf.rooms[r][t] = (*flash)[r][t];
+                buf.rooms[r][t] = *flash[r][t];
         return (func_ptr)setup_handler;
     }
     return (func_ptr)init_cave_handler;
